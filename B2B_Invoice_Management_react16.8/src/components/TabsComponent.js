@@ -1,0 +1,135 @@
+import React, { useState, useEffect } from 'react';
+import { Tabs, Tab, TextField, Button } from '@material-ui/core';
+import DataGridComponent from './datagrid';
+import AddDataComponent from './AddData';
+import axios from 'axios';
+
+function TabComponent() {
+  const [value, setValue] = useState(0);
+  const [data, setData] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [showClearButton, setShowClearButton] = useState(false);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = () => {
+    axios
+      .get('http://localhost:8081/B2B_Invoice_Management_Java/DataLoadingServlet')
+      .then(response => {
+        const formattedData = response.data.map(item => ({
+          ...item,
+          id: item.Sl_no.toString(),
+        }));
+        setData(formattedData);
+      })
+      .catch(error => {
+        console.error('Error fetching data:', error);
+      });
+  };
+
+  const handleTabChange = (event, newValue) => {
+    setValue(newValue);
+    if (newValue === 0) {
+      // Clear search results and reset search-related states
+      setSearchTerm('');
+      setSearchResults([]);
+      setShowSearchResults(false);
+      setShowClearButton(false);
+    }
+  };
+
+  const handleSearch = () => {
+    const filteredData = data.filter(
+      row =>
+        row.CUSTOMER_ORDER_ID
+          .toString()
+          .includes(searchTerm.toLowerCase())
+    );
+    setSearchResults(filteredData);
+    setShowSearchResults(true);
+    setShowClearButton(true);
+    setValue(2); // Set the active tab to Search Result
+  };
+
+  const handleClear = () => {
+    setSearchTerm('');
+    setSearchResults([]);
+    setShowSearchResults(false);
+    setShowClearButton(false);
+    setValue(0); // Set the active tab back to Home Page
+  };
+
+  const handleRefreshData = () => {
+    fetchData();
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', backgroundColor: '#5e5e60' }}>
+        <Tabs
+          value={value}
+          onChange={handleTabChange}
+          TabIndicatorProps={{
+            style: {
+              backgroundColor: '#ffffff',
+            },
+          }}
+          style={{ backgroundColor: '#5e5e60', color: '#ffffff' }}
+        >
+          <Tab label="Home Page" />
+          <Tab label="Add Data" />
+          {showSearchResults && <Tab label="Search Result" />}
+        </Tabs>
+        <div style={{ display: 'flex', marginRight: '20px' }}>
+          <TextField
+            label="Search Customer Order ID"
+            variant="outlined"
+            value={searchTerm}
+            style={{ backgroundColor: '#ffffff', color: 'black'}}
+            disabled={showSearchResults}
+            onChange={e => setSearchTerm(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                handleSearch();
+              }
+            }}
+            fullWidth
+          />
+          {showClearButton && (
+            <Button 
+              variant="contained" 
+              onClick={handleClear}
+              color='secondary'
+              style={{ marginLeft: '5px', backgroundColor: '#db4437' }}
+            >
+              Clear
+            </Button>
+          )}
+        </div>
+      </div>
+      {value === 0 && !showSearchResults && (
+        <DataGridComponent fullData={data} fetchedData={searchResults} value={0} />
+      )}
+      {value === 1 && !showSearchResults && <AddDataComponent />}
+      {(value === 0 && showSearchResults) || value === 2 ? (
+        <DataGridComponent fullData={data} fetchedData={searchResults} value={2} />
+      ) : null}
+      {value === 0 && (
+        <Button
+          variant="contained"
+          color="primary"
+          style={{ margin: '5px', backgroundColor: '#fc7500' }}
+          onClick={handleRefreshData}
+        >
+          REFRESH DATA
+        </Button>
+      )}
+    </div>
+  );
+}
+
+export default TabComponent;

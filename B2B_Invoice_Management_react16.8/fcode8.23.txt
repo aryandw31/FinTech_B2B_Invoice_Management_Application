@@ -1,0 +1,473 @@
+import React, { useEffect, useState } from 'react';
+import { DataGrid } from '@mui/x-data-grid';
+import axios from 'axios';
+import { Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid } from '@material-ui/core';
+import { Tabs, Tab } from '@material-ui/core';
+
+const columns = [
+  { field: 'Sl_no', headerName: 'Sl No', width: 120 },
+  { field: 'CUSTOMER_ORDER_ID', headerName: 'Customer Order Id', width: 200 },
+  { field: 'SALES_ORG', headerName: 'Sales Org', width: 140 },
+  { field: 'DISTRIBUTION_CHANNEL', headerName: 'Distribution Channel', width: 210 },
+  { field: 'COMPANY_CODE', headerName: 'Company Code', width: 180 },
+  { field: 'ORDER_CREATION_DATE', headerName: 'Order Creation Date', width: 210 },
+  { field: 'ORDER_CURRENCY', headerName: 'Order Currency', width: 180 },
+  { field: 'CUSTOMER_NUMBER', headerName: 'Customer Number', width: 200 },
+  { field: 'AMOUNT_IN_USD', headerName: 'Amount in USD', width: 180 },
+  { field: 'ORDER_AMOUNT', headerName: 'Order Amount', width: 170 },
+];
+
+function DataGridComponent() {
+  const [activeTab, setActiveTab] = useState(0);
+
+  const [data, setData] = useState([]);
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [confirmationDialogOpen, setConfirmationDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedRowForEdit, setSelectedRowForEdit] = useState(null);
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+
+  const [formData, setFormData] = useState({
+    customerOrderId: '',
+    salesOrg: '',
+    distributionChannel: '',
+    customerNumber: '',
+    companyCode: '',
+    orderCurrency: '',
+    amountInUSD: '',
+    orderCreationDate: '',
+  });
+
+  const handleSearch = () => {
+    const filteredData = data.filter(
+      (row) =>
+        row.CUSTOMER_ORDER_ID.toString().includes(searchTerm.toLowerCase())
+    );
+    setSearchResults(filteredData);
+    setShowSearchResults(true);
+  };
+
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setShowSearchResults(false);
+  };
+
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+  };
+
+  useEffect(() => {
+    // Fetch data from the server
+    axios
+      .get('http://localhost:8081/h2h_milestone_1/DataLoadingServlet')
+      .then(response => {
+        const formattedData = response.data.map(item => ({
+          ...item,
+          id: item.Sl_no.toString(),
+        }));
+        setData(formattedData);
+      })
+      .catch(error => {
+        console.error('Error fetching data:', error);
+      });
+  }, []);
+
+  const handleDelete = () => {
+    if (selectedRows.length > 0) {
+      setConfirmationDialogOpen(true);
+    }
+  };
+
+  const handleConfirmDelete = () => {
+    // Filter out the selected rows from the data
+    const newData = data.filter((row) => !selectedRows.includes(row.id));
+
+    // Update the data and selected state
+    setData(newData);
+    console.log('Selected Rows:', selectedRows);
+    
+    // Make a DELETE request to the backend for each selected row
+    selectedRows.forEach((Sl_no) => {
+      axios
+        .post(`http://localhost:8081/h2h_milestone_1/DeleteServlet?DEL_ID=${Sl_no}`)
+        .then((response) => {
+          console.log('Delete success:', response.data);
+        })
+        .catch((error) => {
+          console.error('Delete error:', error);
+        });
+    });
+    setSelectedRows([]);
+
+    setConfirmationDialogOpen(false);
+  };
+
+  const handleCancelDelete = () => {
+    setConfirmationDialogOpen(false);
+  };
+
+  const handleEdit = () => {
+    if (selectedRows.length === 1) {
+      const selectedRow = data.find((row) => row.id === selectedRows[0]);
+      setSelectedRowForEdit(selectedRow);
+      setEditDialogOpen(true);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditDialogOpen(false);
+    setSelectedRowForEdit(null);
+  };
+
+  const handleSaveEdit = () => {
+    // Update the edited row with the new values
+    const updatedData = data.map((row) => {
+      if (row.id === selectedRowForEdit.id) {
+        axios
+        .post(
+          `http://localhost:8081/h2h_milestone_1/EditServlet?UPD_ID=${row.Sl_no}&UPD_COMPANY_CODE=${selectedRowForEdit.COMPANY_CODE}&UPD_DISTRIBUTION_CHANNEL=${selectedRowForEdit.DISTRIBUTION_CHANNEL}&UPD_ORDER_CURRENCY=${selectedRowForEdit.ORDER_CURRENCY}`
+        )
+        .then((response) => {
+          console.log('Edit success:', response.data);
+        })
+        .catch((error) => {
+          console.error('Edit error:', error);
+        });
+        return {
+          ...row,
+          ORDER_CURRENCY: selectedRowForEdit.ORDER_CURRENCY,
+          COMPANY_CODE: selectedRowForEdit.COMPANY_CODE,
+          DISTRIBUTION_CHANNEL: selectedRowForEdit.DISTRIBUTION_CHANNEL,
+        };
+      }
+      return row;
+    });
+    
+    setData(updatedData);
+    setEditDialogOpen(false);
+    setSelectedRowForEdit(null);
+  };
+
+  const handleEditRowValueChange = (field, value) => {
+    setSelectedRowForEdit((prevSelectedRow) => ({
+      ...prevSelectedRow,
+      [field]: value,
+    }));
+  };
+
+  const handleSelectionModelChange = (selectionModel) => {
+    setSelectedRows(selectionModel.filter((rowId) => data.some((row) => row.id === rowId)));
+  };
+  
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prevData) => ({
+      ...prevData,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    // Convert form data to query parameters
+    const queryParams = new URLSearchParams(formData).toString();
+
+    // Send the request with query parameters
+    axios.post(`http://localhost:8081/h2h_milestone_1/AddServlet?${queryParams}`)
+      .then((response) => {
+        // Handle the response
+        console.log('Response:', response.data);
+      })
+      .catch((error) => {
+        // Handle the error
+        console.error('Error:', error);
+      });
+
+    // Reset the form after submitting
+    setFormData({
+      customerOrderId: '',
+      salesOrg: '',
+      distributionChannel: '',
+      customerNumber: '',
+      companyCode: '',
+      orderCurrency: '',
+      amountInUSD: '',
+      orderCreationDate: '',
+    });
+  };
+
+  const handleClear = () => {
+    setFormData({
+      customerOrderId: '',
+      salesOrg: '',
+      distributionChannel: '',
+      customerNumber: '',
+      companyCode: '',
+      orderCurrency: '',
+      amountInUSD: '',
+      orderCreationDate: '',
+    });
+    setActiveTab(0)
+  };
+
+  return (
+    <div>
+      <TextField
+        label="Search by Customer Order ID"
+        variant="outlined"
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            handleSearch();
+          }
+        }}
+        fullWidth
+      />
+      <Button
+        variant="contained"
+        color="secondary"
+        onClick={handleClearSearch}
+        style={{ marginLeft: '10px' }}
+      >
+        Clear
+      </Button>
+      <Tabs 
+        value={activeTab} 
+        onChange={handleTabChange}
+        TabIndicatorProps={{
+          style: {
+            backgroundColor: "#ffffff"
+          }
+        }}
+        style={{backgroundColor: '#5e5e60', color: '#ffffff' }}
+      >
+        <Tab label="Home Page" />
+        <Tab label="Add Data" />
+        <Tab label="Search Results" />
+      </Tabs>
+      {activeTab === 0 && (
+      <div>
+      <div style={{ height: 500, width: '100%' }}>
+        <DataGrid
+          style={{ backgroundColor: '#5e5e60', color: '#ffffff' }}
+          columns={columns}
+          rows={data}
+          checkboxSelection
+          rowsPerPageOptions={[100, 50, 25, 15, 8]}
+          onSelectionModelChange={handleSelectionModelChange}
+          isRowSelectable={(params) => data.some((row) => row.id === params.id)}
+          disableSelectionOnClick
+        />
+      </div>
+
+      <Button
+        variant="contained"
+        color="primary"
+        onClick={handleDelete}
+        disabled={selectedRows.length === 0}
+      >
+        Delete
+      </Button>
+
+      <Dialog open={confirmationDialogOpen}>
+        <DialogTitle>Confirm Deletion</DialogTitle>
+        <DialogContent>
+          Are you sure you want to delete the selected rows?
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelDelete} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={handleConfirmDelete} color="primary">
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Button
+        variant="contained"
+        color="primary"
+        onClick={handleEdit}
+        disabled={selectedRows.length !== 1}
+      >
+        Edit
+      </Button>
+
+      <Dialog open={confirmationDialogOpen}>
+        <DialogTitle>Confirm Deletion</DialogTitle>
+        <DialogContent>
+          Are you sure you want to delete the selected rows?
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelDelete} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={handleConfirmDelete} color="primary">
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={editDialogOpen}>
+        <DialogTitle>Edit Row</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Order Currency"
+            variant='outlined'
+            value={selectedRowForEdit ? selectedRowForEdit.ORDER_CURRENCY : ''}
+            onChange={(e) => handleEditRowValueChange('ORDER_CURRENCY', e.target.value)}
+          />
+          <TextField
+            label="Company Code"
+            variant='outlined'
+            value={selectedRowForEdit ? selectedRowForEdit.COMPANY_CODE : ''}
+            onChange={(e) => handleEditRowValueChange('COMPANY_CODE', e.target.value)}
+          />
+          <TextField
+            label="Distribution Channel"
+            variant='outlined'
+            value={selectedRowForEdit ? selectedRowForEdit.DISTRIBUTION_CHANNEL : ''}
+            onChange={(e) => handleEditRowValueChange('DISTRIBUTION_CHANNEL', e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelEdit} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={handleSaveEdit} color="primary">
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+      </div>
+      )}
+
+      {activeTab === 1 && (
+        <form onSubmit={handleSubmit}>
+        <Grid container spacing={2}>
+          <Grid item xs={3}>
+            <TextField
+              name="customerOrderId"
+              label="Customer Order ID"
+              variant='outlined'
+              value={formData.customerOrderId}
+              onChange={handleInputChange}
+              fullWidth
+            />
+          </Grid>
+          <Grid item xs={3}>
+            <TextField
+              name="salesOrg"
+              label="Sales Org"
+              variant='outlined'
+              value={formData.salesOrg}
+              onChange={handleInputChange}
+              fullWidth
+            />
+          </Grid>
+          <Grid item xs={6}>
+            <TextField
+              name="distributionChannel"
+              label="Distribution Channel"
+              variant='outlined'
+              value={formData.distributionChannel}
+              onChange={handleInputChange}
+              fullWidth
+            />
+          </Grid>
+          <Grid item xs={3}>
+            <TextField
+              name="customerNumber"
+              label="Customer Number"
+              variant='outlined'
+              value={formData.customerNumber}
+              onChange={handleInputChange}
+              fullWidth
+            />
+          </Grid>
+          <Grid item xs={3}>
+            <TextField
+              name="companyCode"
+              label="Company Code"
+              variant='outlined'
+              value={formData.companyCode}
+              onChange={handleInputChange}
+              fullWidth
+            />
+          </Grid>
+          <Grid item xs={2}>
+            <TextField
+              name="orderCurrency"
+              label="Order Currency"
+              variant='outlined'
+              value={formData.orderCurrency}
+              onChange={handleInputChange}
+              fullWidth
+            />
+          </Grid>
+          <Grid item xs={2}>
+            <TextField
+              name="amountInUSD"
+              label="Amount in USD"
+              variant='outlined'
+              value={formData.amountInUSD}
+              onChange={handleInputChange}
+              fullWidth
+            />
+          </Grid>
+          <Grid item xs={2}>
+            <TextField
+              name="orderCreationDate"
+              label="Order Creation Date"
+              variant='outlined'
+              type="date"
+              value={formData.orderCreationDate}
+              onChange={handleInputChange}
+              InputLabelProps={{
+                shrink: true,
+              }}
+              fullWidth
+            />
+          </Grid>
+        </Grid>
+  
+        <Button type="submit" variant="contained" color="primary">
+          Add
+        </Button>
+        <Button variant="contained" color="secondary" onClick={handleClear}>
+          Clear Data
+        </Button>
+      </form>
+      )}
+
+      {/* Search results section */}
+    {searchResults.length > 0 && (
+      <div>
+        <h2>Search Results:</h2>
+        <div style={{ height: 400, width: '100%' }}>
+          <DataGrid
+            style={{ backgroundColor: '#5e5e60', color: '#ffffff' }}
+            columns={columns}
+            rows={searchResults}
+            checkboxSelection
+            rowsPerPageOptions={[100, 50, 25, 15, 8]}
+            onSelectionModelChange={handleSelectionModelChange}
+            isRowSelectable={(params) =>
+              searchResults.some((row) => row.id === params.id)
+            }
+            disableSelectionOnClick
+          />
+        </div>
+      </div>
+    )}
+
+    </div>
+  );
+}
+
+export default DataGridComponent;
